@@ -1,3 +1,0 @@
-Training Results for ieee39 - 2025-02-03_18-24-25
---------------------------------------
-Seed	Test MSE	Test RMSE

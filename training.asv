@@ -25,7 +25,7 @@
 %% Settings
 bus_system = 'ieee24';  % Options: 'ieee24', 'ieee39', etc.
 
-seed_list = [128]; % How many seeds / various models?
+seed_list = [1]; % How many seeds / various models?
 
 % Setup results collection 
 results_folder = 'results';
@@ -42,7 +42,7 @@ fprintf(fileID, 'Seed\tTest MSE\tTest RMSE\tTraining Time\n');
 
 %% Variables for Testing
 visual = false;
-save_models = true;
+save_models = false;
 
 for s = 1:length(seed_list)
 
@@ -244,12 +244,6 @@ for s = 1:length(seed_list)
     
     % Do we want to save these models?
     if save_models
-        % Ensure folder exists 
-        models_folder = 'models';
-        if ~exist(models_folder, 'dir')
-            mkdir(models_folder);
-        end
-
         % Define a filename for saving
         model_filename = sprintf('models/gcn_%s_%s.mat', bus_system, timestamp);
 
@@ -274,8 +268,9 @@ Yt = Y_test{randomIdx}; % True labels
 Y_pred = GINEConv(ANorm, Xt, E, parameters);
 
 % Plot the results
-plotGraphComparison(ANorm, Yt, Y_pred, 'Voltage Magnitude', 3, bus_system);
-plotGraphComparison(ANorm, Yt, Y_pred, 'Voltage Angle', 4, bus_system);
+plotGraphComparison(ANorm, Yt, Y_pred, 'Voltage Magnitude', 3);
+plotGraphComparison(ANorm, Yt, Y_pred, 'Voltage Angle', 4);
+
 
 
 %% Helper functions %%
@@ -371,25 +366,34 @@ function ANorm = normalizeAdjacency(A)
     ANorm = diag(degreeInvSqrt) * A * diag(degreeInvSqrt);
 end
 
-function plotGraphComparison(A, trueValues, predValues, graphTitle, featureIdx, bus_system)
-    % Ensure A is a full matrix and create graph
+function plotGraph(A,graphTitle)
+    G = graph(A); % Create a graph object from adjacency matrix
+    plot(G, 'NodeLabel', 1:size(A, 1));
+    title(graphTitle);
+end 
+
+function plotGraphComparison(A, trueValues, predValues, graphTitle, featureIdx)
     A = full(A);
     G = graph(A);
 
-    % Extract the selected feature column from the feature matrices
+    % Extract only the selected feature (column) from the feature matrices
     trueFeature = trueValues(:, featureIdx);
     predFeature = predValues(:, featureIdx);
 
-    % Determine global color limits for consistency
+    % disp(trueFeature)
+    % disp(predFeature)
+
+    % Determine global color limits (same for both subplots)
     globalMin = min([trueFeature(:); predFeature(:)]);
     globalMax = max([trueFeature(:); predFeature(:)]);
     
     globalMin = double(extractdata(globalMin));
     globalMax = double(extractdata(globalMax));
+
     predFeature = double(extractdata(predFeature));
 
-    % Create a figure
     figure;
+    
     colormap(jet);
 
     % ---- Predicted Feature Plot ----
@@ -410,24 +414,6 @@ function plotGraphComparison(A, trueValues, predValues, graphTitle, featureIdx, 
     p1.NodeCData = trueFeature; 
     clim([globalMin, globalMax]); 
 
-    % ---- Save the Figure ----
-    % Ensure "figs" directory exists
-    figs_folder = 'figs';
-    if ~exist(figs_folder, 'dir')
-        mkdir(figs_folder);
-    end
-
-    % Generate timestamp
-    timestamp = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-
-    % Construct filename with bus system, title, and timestamp
-    filename = fullfile(figs_folder, sprintf('%s_%s_%s.jpg', bus_system, graphTitle, timestamp));
-
-    % Save the figure as JPG
-    saveas(gcf, filename);
-
-    % Close the figure to avoid cluttering
-    close(gcf);
 end
 
 % ReLU implementation 
