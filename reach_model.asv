@@ -14,6 +14,8 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
     
     [ANorm, E, X_test, Y_test] = get_test_data(bus_system,max_snapshots);
 
+    num_graphs = 100;
+
     N = size(ANorm,1);
 
     % Store resuts
@@ -22,14 +24,17 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
     rT = {};
 
     for k = 1:length(epsilon)
+        for graph = 1:num_graphs
+            X = X_test{graph};
+            X = dlarray(X);
         for i = 1:N
             
             % Adjacency matrix does not change
             AVerify = ANorm;
 
             % Get the input set
-            lb = extractdata(X_test-epsilon(k));
-            ub = extractdata(X_test+epsilon(k));
+            lb = extractdata(X-epsilon(k));
+            ub = extractdata(X+epsilon(k));
             Xverify = ImageStar(lb,ub);
 
             % What to do about edge features? 
@@ -49,7 +54,7 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
             reachMethod = 'approx-star';
             L = ReluLayer(); % Create relu layer;
             
-            Y = computeReachability({w1,w2,w3}, L, reachMethod, Xverify, EVerify, Averify);
+            Y = computeReachability({w1,w2,w3}, L, reachMethod, Xverify, EVerify, AVerify);
 
             % store results
             outputSets{i} = Y;
@@ -60,6 +65,7 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
 
          % Save verification results
         save("results/verified_nodes_"+modelPath+"_eps"+string(epsilon(k))+".mat", "outputSets", "targets", "rT");
+        end 
     end
     
 end
@@ -155,9 +161,50 @@ function Y = computeReachability(weights,L,reachMethod,input,edgeMat,adjMat)
 % edgeMat = 
 % Y = computed output of GNN (ImageStar)
 
+Xverify = input; % ImageStar
+Averify = adjMat; % N x N 
+Everify = edgeMat; % N x N x E
+n = size(adjMat,1);
+
+%%%%%%%%% Layer 1 %%%%%%%%%%%
+% H_k = (H_(k-1) + A*ReLU(H_(k-1)+E))W_k
+
+% This is the transformation of c and V vectors where c is V0 and V1...Vf
+% is a diagonal matrix with the perturbations 
+V = Xverify.V;
+c = V(:,:,1,1); % N x F 
+% newV = reshape(newV, 24, []); % 4D double to n x (numel(A)*features+features) 
+% Step 1)  Add features and edge features (adjust c)
+% Need to transform features to match dimensionality for addition 
+newc = addEdgeNodeFeatures(c,Everify); % N x N x F 
 
 
+Y = 0;
 
 
+end
 
+function Z_agg = addEdgeNodeFeatures(Z,E)
+    % Z: node features (N x F)
+    % E: edge features (N x N x D)
+
+    [N, F] = size(Z); % Number of nodes (N) and node feature dimension (F)
+    D = size(E, 3); % Edge feature dimension (D)
+    W_e = initializeWeights(D, F);
+
+    %W_e is linear transform to get edge features in same dim as node feats
+    E_transformed = reshape(E, [N*N, D]) * W_e; % (N^2 x D) * (D x F) -> (N^2 x F)
+
+    %bring it back to make more effecient addition of xj + eji (from the eq in fig above)
+    E_transformed = reshape(E_transformed, [N, N, F]); % Back to (N x N x F)
+
+    %convert NxF into Nx1xF (seen better in image below)
+    Z_expanded = reshape(Z, [N, 1, F]); % Reshape to (N x 1 x F) for broadcasting
+
+    %do the addition and relu so now we have the features associated with every edge
+    Z_agg = Z_expanded + E_transformed; % (N x 1 x F) + (N x N x F) -> (N x N x F)
+end 
+
+function W = initializeWeights(input_dim, output_dim)
+    W = randn(input_dim, output_dim) * sqrt(2 / (input_dim + output_dim));
 end
