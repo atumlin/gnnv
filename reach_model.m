@@ -173,12 +173,21 @@ n = size(adjMat,1);
 % is a diagonal matrix with the perturbations 
 V = Xverify.V;
 c = V(:,:,1,1); % N x F 
-% newV = reshape(newV, 24, []); % 4D double to n x (numel(A)*features+features) 
 % Step 1)  Add features and edge features (adjust c)
 % Need to transform features to match dimensionality for addition 
 newc = addEdgeNodeFeatures(c,Everify); % N x F 
 V(:,:,1,1) = newc;
-% Step 2) apply ReLU 
+% Step 2) Create new star with new c 
+X2 = ImageStar(V, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
+% Step 3) Apply ReLU
+X2b = L.reach(X2, reachMethod);
+X3 = X2b.MinkowskiSum(Xverify);
+% Step 4) Multiply by adjacency 
+newV = X3.V; % 24x4x1x97
+newV = reshape(newV, 24, []); % 4D double to n x (numel(A)*features+features) (24 x 388)
+newV = Averify * newV; % (24 x 388)
+% Step 5) 
+
 
 Y = 0;
 
@@ -206,7 +215,7 @@ function Z_out = addEdgeNodeFeatures(Z,E)
     Z_agg = Z_expanded + E_transformed; % (N x 1 x F) + (N x N x F) -> (N x N x F)
 
     Z_out = sum(Z_agg, 2); % N x 1 x F
-    Z_out = squeeze(Z_out); % N x F CHECK THIS 
+    Z_out = squeeze(Z_out); % N x F 
 end 
 
 function W = initializeWeights(input_dim, output_dim)
