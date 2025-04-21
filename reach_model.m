@@ -171,27 +171,86 @@ n = size(adjMat,1);
 
 % This is the transformation of c and V vectors where c is V0 and V1...Vf
 % is a diagonal matrix with the perturbations 
-V = Xverify.V;
-c = V(:,:,1,1); % N x F 
+V = Xverify.V; % 24x4x1x97
+c = V(:,:,1,1); % 24x4
 % Step 1)  Add features and edge features (adjust c)
 % Need to transform features to match dimensionality for addition 
-newc = addEdgeNodeFeatures(c,Everify); % N x F 
-V(:,:,1,1) = newc;
+newc = addEdgeNodeFeatures(c,Everify); % 24x4
+V(:,:,1,1) = newc; % 24x4x1x97
 % Step 2) Create new star with new c 
 X2 = ImageStar(V, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
 % Step 3) Apply ReLU
 X2b = L.reach(X2, reachMethod);
+if size(X2b.V) ~= size(X2.V)
+    X2b = X2b(:,:,:,1:97);
+end
 X3 = X2b.MinkowskiSum(Xverify);
 % Step 4) Multiply by adjacency 
-newV = X3.V; % 24x4x1x97
-newV = reshape(newV, 24, []); % 4D double to n x (numel(A)*features+features) (24 x 388)
-newV = Averify * newV; % (24 x 388)
-% Step 5) 
+% newV = X3.V; % 24x4x1x97
+newV = squeeze(X3.V); % 24x4x97
+Averify_full = full(Averify); % 24x24
+newV = tensorprod(Averify_full, newV, 2, 1); % 24x4x97
+% Step 5) Add updated features with original features 
+newc = newV(:,1:4);
+newc = newc + c;
+newV(:,1:4) = newc; % 24x4x97
+% Step 6) Multiply by weights
+W1 = extractdata(weights{1}); % 4x32
+newV = tensorprod(newV, W1, 2, 1); % 24x97x32
+newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x32
+newV = permute(newV, [1 4 3 2]); % 24x32x1x97
+% Step 7) Create new ImageStar
+size(newV)
+X4 = ImageStar(newV, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
 
+%%%%%%%%% Layer 2 %%%%%%%%%%%
+V = X4.V; % 24x32x1x97
+c = V(:,:,1,1); % 24x32
 
-Y = 0;
+newc = addEdgeNodeFeatures(c,Everify); % 24x32
+V(:,:,1,1) = newc; % 24x32x1x97
 
+X5 = ImageStar(V, X4.C, X4.d, X4.pred_lb, X4.pred_ub);
 
+X5b = L.reach(X5, reachMethod);
+if size(X5b.V) ~= size(X5.V)
+    X5b = X5b(:,:,:,1:97);
+end
+X6 = X5b.MinkowskiSum(X4);
+
+newV = X6.V; % 24x32x1x97
+
+newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x1x97
+
+W2 = extractdata(weights{2}); % 32x32
+newV = permute(tensorprod(newV, W2, 2, 1), [1 4 2 3]); % 24x32x1x97
+size(newV)
+X7 = ImageStar(newV, X4.C, X4.d, X4.pred_lb, X4.pred_ub);
+
+%%%%%%%%% Layer 3 %%%%%%%%%%%
+
+V = X7.V; % 24x32x1x97
+c = V(:,:,1,1); % 24x32
+
+newc = addEdgeNodeFeatures(c,Everify); % 24x32
+V(:,:,1,1) = newc; % 24x32x1x97
+
+X8 = ImageStar(V, X7.C, X7.d, X7.pred_lb, X7.pred_ub);
+
+X8b = L.reach(X8, reachMethod);
+if size(X8b.V) ~= size(X8.V)
+    X8b = X8b(:,:,:,1:97);
+end
+X9 = X8b.MinkowskiSum(X4);
+
+newV = X9.V; % 24x32x1x97
+
+newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x1x97
+
+W3 = extractdata(weights{3}); % 32x4
+newV = permute(tensorprod(newV, W3, 2, 1), [1 4 2 3]);  % 24x4x1x97
+size(newV)
+Y = ImageStar(newV, X9.C, X9.d, X9.pred_lb, X9.pred_ub);
 end
 
 function Z_out = addEdgeNodeFeatures(Z,E)
@@ -221,3 +280,4 @@ end
 function W = initializeWeights(input_dim, output_dim)
     W = randn(input_dim, output_dim) * sqrt(2 / (input_dim + output_dim));
 end
+

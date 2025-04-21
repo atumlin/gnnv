@@ -1,6 +1,0 @@
-% Script for getting output set for all PF analysis models 
-
-modelDir = 'models/';
-fileStructs = dir(modelDir + "gcn_ieee24_*.mat");
-
-reach_model(path)
