@@ -1,10 +1,12 @@
-% Getting the output reachable set of a Graph Neural Network
+%% Getting the output reachable set of a Graph Neural Network
 % This code is specifically looking at PF Analysis using GINEConv Layers
+% Author: Anne Tumlin
+% Date: 03/15/2025
 
 function reach_model(modelPath,bus_system,max_snapshots,epsilon)
     
     %% Load GCN parameters
-    load("models/"+modelPath);
+    load(modelPath);
     
     w1 = gather(parameters.mult1.Weights);
     w2 = gather(parameters.mult2.Weights);
@@ -14,9 +16,7 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
     
     [ANorm, E, X_test, Y_test] = get_test_data(bus_system,max_snapshots);
 
-    num_graphs = 100;
-
-    N = size(ANorm,1);
+    num_graphs = numel(X_test);
 
     % Store resuts
     targets = {};
@@ -24,11 +24,12 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
     rT = {};
 
     for k = 1:length(epsilon)
-        for graph = 1:num_graphs
-            X = X_test{graph};
+
+        for i = 1:num_graphs
+
+            X = X_test{i};
             X = dlarray(X);
-        for i = 1:N
-            
+
             % Adjacency matrix does not change
             AVerify = ANorm;
 
@@ -58,14 +59,16 @@ function reach_model(modelPath,bus_system,max_snapshots,epsilon)
 
             % store results
             outputSets{i} = Y;
-            targets{i} = Y_test;
+            target_vals = Y_test{1,i};
+            targets{i} = target_vals;
             rT{i} = toc(t);
-
-        end
+    
+         end
 
          % Save verification results
-        save("results/verified_nodes_"+modelPath+"_eps"+string(epsilon(k))+".mat", "outputSets", "targets", "rT");
-        end 
+        [~, baseName, ~] = fileparts(modelPath);  % removes 'models/' and '.mat'
+        save("results/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
+             "outputSets", "targets", "rT");
     end
     
 end
@@ -181,27 +184,28 @@ V(:,:,1,1) = newc; % 24x4x1x97
 X2 = ImageStar(V, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
 % Step 3) Apply ReLU
 X2b = L.reach(X2, reachMethod);
-if size(X2b.V) ~= size(X2.V)
-    X2b = X2b(:,:,:,1:97);
-end
+
 X3 = X2b.MinkowskiSum(Xverify);
+
 % Step 4) Multiply by adjacency 
 % newV = X3.V; % 24x4x1x97
 newV = squeeze(X3.V); % 24x4x97
 Averify_full = full(Averify); % 24x24
 newV = tensorprod(Averify_full, newV, 2, 1); % 24x4x97
+
 % Step 5) Add updated features with original features 
 newc = newV(:,1:4);
 newc = newc + c;
 newV(:,1:4) = newc; % 24x4x97
+
 % Step 6) Multiply by weights
 W1 = extractdata(weights{1}); % 4x32
 newV = tensorprod(newV, W1, 2, 1); % 24x97x32
 newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x32
 newV = permute(newV, [1 4 3 2]); % 24x32x1x97
+
 % Step 7) Create new ImageStar
-size(newV)
-X4 = ImageStar(newV, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
+X4 = ImageStar(newV, X3.C, X3.d, X3.pred_lb, X3.pred_ub);
 
 %%%%%%%%% Layer 2 %%%%%%%%%%%
 V = X4.V; % 24x32x1x97
@@ -213,9 +217,7 @@ V(:,:,1,1) = newc; % 24x32x1x97
 X5 = ImageStar(V, X4.C, X4.d, X4.pred_lb, X4.pred_ub);
 
 X5b = L.reach(X5, reachMethod);
-if size(X5b.V) ~= size(X5.V)
-    X5b = X5b(:,:,:,1:97);
-end
+
 X6 = X5b.MinkowskiSum(X4);
 
 newV = X6.V; % 24x32x1x97
@@ -224,8 +226,8 @@ newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x1x97
 
 W2 = extractdata(weights{2}); % 32x32
 newV = permute(tensorprod(newV, W2, 2, 1), [1 4 2 3]); % 24x32x1x97
-size(newV)
-X7 = ImageStar(newV, X4.C, X4.d, X4.pred_lb, X4.pred_ub);
+
+X7 = ImageStar(newV, X6.C, X6.d, X6.pred_lb, X6.pred_ub);
 
 %%%%%%%%% Layer 3 %%%%%%%%%%%
 
@@ -238,9 +240,7 @@ V(:,:,1,1) = newc; % 24x32x1x97
 X8 = ImageStar(V, X7.C, X7.d, X7.pred_lb, X7.pred_ub);
 
 X8b = L.reach(X8, reachMethod);
-if size(X8b.V) ~= size(X8.V)
-    X8b = X8b(:,:,:,1:97);
-end
+
 X9 = X8b.MinkowskiSum(X4);
 
 newV = X9.V; % 24x32x1x97
@@ -249,7 +249,6 @@ newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x1x97
 
 W3 = extractdata(weights{3}); % 32x4
 newV = permute(tensorprod(newV, W3, 2, 1), [1 4 2 3]);  % 24x4x1x97
-size(newV)
 Y = ImageStar(newV, X9.C, X9.d, X9.pred_lb, X9.pred_ub);
 end
 
