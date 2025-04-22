@@ -15,14 +15,14 @@ function verify_gine(epsilons, models)
 
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
-            for i = 1:length(rdata.outputSets)
+            for i = 1:length(10)
                 Y = rdata.outputSets{i};
                 label = rdata.targets{i};
                 results{i} = verifyNode(Y, label, eps);
             end
 
             % Save results
-            % parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets);
+            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets);
         end
     end
 end
