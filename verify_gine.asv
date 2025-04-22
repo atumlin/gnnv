@@ -18,7 +18,7 @@ function verify_gine(epsilons, models)
             for i = 1:length(rdata.outputSets)
                 Y = rdata.outputSets{i};
                 label = rdata.targets{i};
-                results{i} = verifyNode(Y, label);
+                results{i} = verifyNode(Y, label, eps);
             end
 
             % Save results
@@ -28,7 +28,7 @@ function verify_gine(epsilons, models)
 end
 
 % Check robustness of every node. 
-function results = verifyNode(X, target)
+function results = verifyNode(X, target,epsilon)
 node = size(target,1);
 results = 3*ones(node,1); 
     for i=1:node
@@ -37,17 +37,57 @@ results = 3*ones(node,1);
         Y = X.affineMap(matIdx, []); % Reduce Imagestar to 1 dimension
         Y = Y.toStar; % convert to star
         nodeTrueVals = target(i,:);
-        nodeHs = vals2Hs(nodeTrueVals); % helper function below
+        nodeHs = vals2Hs_regression(nodeTrueVals); % helper function below
         res = verify_specification(Y,nodeHs);
         if res == 2
             % check is propery is violated
-            res = checkViolated(Y, target(i,:)); 
+            res = checkViolated(Y, target(i,:)); % helper function below
         end
         results(i) = res;
     end
 end
 
+function Hs = vals2Hs_regression(y_ref, delta)
+    % Generate 2 halfspaces per output dim:
+    % y_i <= y_ref(i) + delta  →  [1 0 ...] * y <= b
+    % y_i >= y_ref(i) - delta  →  [-1 0 ...] * y <= -a
 
+    n = length(y_ref);
+    G = [ eye(n);    % upper bounds
+         -eye(n) ];  % lower bounds
+
+    g = [ y_ref + delta;
+         -y_ref + delta ];
+
+    Hs = [];
+    for i = 1:size(G,1)
+        Hs = [Hs; HalfSpace(G(i,:), g(i))];
+    end
+end
+
+function res = checkViolated(Set, label)
+    res = 2; % assume unknown (property is not unsat, try to sat)
+    % get target label index
+    switch label
+        case 'H'
+            target = 1;
+        case 'C'
+            target = 2;
+        case 'N'
+            target = 3;
+        case 'O'
+            target = 4;
+        case 'S'
+            target = 5;
+    end
+    % Get bounds for every index
+    [lb,ub] = Set.getRanges;
+    maxTarget = ub(target);
+    % max value of the target index smaller than any other lower bound?
+    if any(lb > maxTarget)
+        res = 0; % falsified
+    end
+end
 
 
 
