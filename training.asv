@@ -25,6 +25,7 @@
 %% Settings
 bus_system = 'ieee24';  % Options: 'ieee24', 'ieee39', etc.
 
+for 
 seed_list = [128]; % How many seeds / various models?
 
 % Setup results collection 
@@ -131,23 +132,30 @@ for s = 1:length(seed_list)
     hidden_dim = 32;
     output_dim = size(Y.Y_polarpf{1}, 2);
     
-    % Message-passing weights
-    parameters.mult1.Weights = initializeGlorot([input_dim, hidden_dim], hidden_dim, input_dim, "double");
-    parameters.mult2.Weights = initializeGlorot([hidden_dim, hidden_dim], hidden_dim, hidden_dim, "double");
-    parameters.mult3.Weights = initializeGlorot([hidden_dim, output_dim], output_dim, input_dim, "double");
+   % Message-passing weights
+    W1 = initializeGlorot([input_dim, hidden_dim], hidden_dim, input_dim, "double");
+    W2 = initializeGlorot([hidden_dim, hidden_dim], hidden_dim, hidden_dim, "double");
+    W3 = initializeGlorot([hidden_dim, output_dim], output_dim, input_dim, "double");
     
     % Edge transform weights
-    parameters.edge1.Weights = initializeWeights(D, input_dim);   % layer 1
-    parameters.edge2.Weights = initializeWeights(D, hidden_dim);  % layer 2
-    parameters.edge3.Weights = initializeWeights(D, hidden_dim);  % layer 3
+    E1 = initializeWeights(D, input_dim);
+    E2 = initializeWeights(D, hidden_dim);
+    E3 = initializeWeights(D, hidden_dim);
     
-    % If GPU is available, move everything to GPU
+    % If GPU is available, move everything to GPU before wrapping in dlarray
     if canUseGPU()
-        fields = fieldnames(parameters);
-        for f = 1:length(fields)
-            parameters.(fields{f}).Weights = gpuArray(parameters.(fields{f}).Weights);
-        end
+        W1 = gpuArray(W1); W2 = gpuArray(W2); W3 = gpuArray(W3);
+        E1 = gpuArray(E1); E2 = gpuArray(E2); E3 = gpuArray(E3);
     end
+    
+    % Wrap in dlarray to enable gradient tracing
+    parameters.mult1.Weights = dlarray(W1);
+    parameters.mult2.Weights = dlarray(W2);
+    parameters.mult3.Weights = dlarray(W3);
+    
+    parameters.edge1.Weights = dlarray(E1);
+    parameters.edge2.Weights = dlarray(E2);
+    parameters.edge3.Weights = dlarray(E3);
 
     % Training hyperparameters
     num_epochs = 10;
@@ -246,18 +254,28 @@ for s = 1:length(seed_list)
         if ~exist(models_folder, 'dir')
             mkdir(models_folder);
         end
-
+    
         % Define a filename for saving
         model_filename = sprintf('models/gcn_%s_%s.mat', bus_system, timestamp);
-
-        % Save model parameters and normalization stats
+    
+        % Move everything back to CPU
+        parameters = gather_parameters(parameters);
+        ANorm = gather(ANorm);
+        E = gather(E);
+    
+        for i = 1:numel(X_test)
+            X_test{i} = gather(X_test{i});
+            Y_test{i} = gather(Y_test{i});
+        end
+    
+        % Save model and stats
         save(model_filename, ...
-        "parameters", ...
-        "ANorm", "E", ...
-        "X_test", "Y_test", ...
-        "global_mean", "global_std", ...
-        "global_mean_labels", "global_std_labels");
-
+            "parameters", ...
+            "ANorm", "E", ...
+            "X_test", "Y_test", ...
+            "global_mean", "global_std", ...
+            "global_mean_labels", "global_std_labels");
+    
         fprintf('Model saved to %s\n', model_filename);
     end
 end
@@ -452,4 +470,17 @@ function tf = canUseGPU()
         gpuAvailable = gpuDeviceCount > 0;
     end
     tf = gpuAvailable;
+end
+
+function cpu_params = gather_parameters(params)
+    cpu_params = struct;
+    fields = fieldnames(params);
+    for i = 1:numel(fields)
+        layer = params.(fields{i});
+        if isstruct(layer) && isfield(layer, "Weights")
+            cpu_params.(fields{i}).Weights = gather(layer.Weights);
+        else
+            cpu_params.(fields{i}) = gather(layer);
+        end
+    end
 end

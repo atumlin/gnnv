@@ -1,4 +1,0 @@
-Training Results for ieee24 - 2025-04-23_13-09-27
---------------------------------------
-Seed	Test MSE	Test RMSE	Training Time
-128	0.086882	0.294758	884.28
