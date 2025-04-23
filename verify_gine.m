@@ -8,21 +8,29 @@ function verify_gine(epsilons, models)
     for m = 1:length(models)
         modelPath = models(m);
 
+        fprintf('\n--- Starting verification for model: %s ---\n', modelPath);
+
         for k = 1:length(epsilons)
             eps = epsilons(k);
+            fprintf('Processing epsilon: %.4f ...\n', eps);
             % Load results
             rdata = load("results/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
 
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
-            for i = 1:length(10)
+            tic; 
+
+            for i = 1:10
                 Y = rdata.outputSets{i};
                 label = rdata.targets{i};
                 results{i} = verifyNode(Y, label, eps);
             end
 
+            elapsed = toc;
+            fprintf('Finished epsilon %.4f for model %s in %.2f seconds\n', eps, modelPath, elapsed);
+
             % Save results
-            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets);
+            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets, elapsed);
         end
     end
 end
@@ -51,6 +59,7 @@ function Hs = vals2Hs_regression(y_ref, delta)
     % Generate 2 halfspaces per output dim:
     % y_i <= y_ref(i) + delta  →  [1 0 ...] * y <= b
     % y_i >= y_ref(i) - delta  →  [-1 0 ...] * y <= -a
+    delta = 1;
 
     n = length(y_ref);
     G = [ eye(n);    % upper bounds
@@ -83,7 +92,7 @@ function res = checkViolated_regression(Set, y_ref, delta)
 end
 
 
-function parsave(modelPath, epsilon, results, outputSets, rT, targets)
+function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing)
     fname = "results/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
-    save(fname, "results", "outputSets", "rT", "targets");
+    save(fname, "results", "outputSets", "rT", "targets", "timing");
 end

@@ -153,9 +153,9 @@ for s = 1:length(seed_list)
     end
 
     % Training hyperparameters
-    num_epochs = 50;
+    num_epochs = 10;
     lr = 0.01;
-    epsilon = 0.01;
+    % epsilon = 0.01;
     val_freq = 10;
     
     % Setup monitor 
@@ -254,7 +254,12 @@ for s = 1:length(seed_list)
         model_filename = sprintf('models/gcn_%s_%s.mat', bus_system, timestamp);
 
         % Save model parameters and normalization stats
-        save(model_filename, "parameters", "global_mean", "global_std", "global_mean_labels", "global_std_labels");
+        save(model_filename, ...
+        "parameters", ...
+        "ANorm", "E", ...
+        "X_test", "Y_test", ...
+        "global_mean", "global_std", ...
+        "global_mean_labels", "global_std_labels");
 
         fprintf('Model saved to %s\n', model_filename);
     end
@@ -350,7 +355,7 @@ function Z_next = GINEConvLayer(ANorm, Z, E, W)
     Z_new = sum(Z_agg_sum, 2); % Sum over the second dimension -> (N x 1 x F)
     Z_message = reshape(Z_new, [N, F]); % (N x F)
 
-    epsilon = 0.01;
+    epsilon = 0.00;
     
     %as in GINE it combines that Z message with the original xi
     Z_next = (1 + epsilon) * Z + Z_message;

@@ -8,21 +8,29 @@ function verify_gine(epsilons, models)
     for m = 1:length(models)
         modelPath = models(m);
 
+        fprintf('\n--- Starting verification for model: %s ---\n', modelPath);
+
         for k = 1:length(epsilons)
             eps = epsilons(k);
+            fprintf('Processing epsilon: %.4f ...\n', eps);
             % Load results
             rdata = load("results/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
 
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
-            for i = 1:length(rdata.outputSets)
+            tic; 
+
+            for i = 1:10
                 Y = rdata.outputSets{i};
                 label = rdata.targets{i};
                 results{i} = verifyNode(Y, label, eps);
             end
 
+            elapsed = toc;
+            fprintf('Finished epsilon %.4f for model %s in %.2f seconds\n', eps, modelPath, elapsed);
+
             % Save results
-            % parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets);
+            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets, elapsed);
         end
     end
 end
@@ -37,11 +45,11 @@ results = 3*ones(node,1);
         Y = X.affineMap(matIdx, []); % Reduce Imagestar to 1 dimension
         Y = Y.toStar; % convert to star
         nodeTrueVals = target(i,:);
-        nodeHs = vals2Hs_regression(nodeTrueVals); % helper function below
+        nodeHs = vals2Hs_regression(nodeTrueVals,epsilon); % helper function below
         res = verify_specification(Y,nodeHs);
         if res == 2
             % check is propery is violated
-            res = checkViolated(Y, target(i,:)); % helper function below
+            res = checkViolated_regression(Y, target(i,:),epsilon); % helper function below
         end
         results(i) = res;
     end
@@ -51,7 +59,7 @@ function Hs = vals2Hs_regression(y_ref, delta)
     % Generate 2 halfspaces per output dim:
     % y_i <= y_ref(i) + delta  →  [1 0 ...] * y <= b
     % y_i >= y_ref(i) - delta  →  [-1 0 ...] * y <= -a
-
+    delta = 0.
     n = length(y_ref);
     G = [ eye(n);    % upper bounds
          -eye(n) ];  % lower bounds
@@ -65,34 +73,25 @@ function Hs = vals2Hs_regression(y_ref, delta)
     end
 end
 
-function res = checkViolated(Set, label)
-    res = 2; % assume unknown (property is not unsat, try to sat)
-    % get target label index
-    switch label
-        case 'H'
-            target = 1;
-        case 'C'
-            target = 2;
-        case 'N'
-            target = 3;
-        case 'O'
-            target = 4;
-        case 'S'
-            target = 5;
-    end
-    % Get bounds for every index
-    [lb,ub] = Set.getRanges;
-    maxTarget = ub(target);
-    % max value of the target index smaller than any other lower bound?
-    if any(lb > maxTarget)
-        res = 0; % falsified
+function res = checkViolated_regression(Set, y_ref, delta)
+    res = 2;  % Start assuming unknown
+
+    [lb, ub] = Set.getRanges;
+
+    % Make sure all vectors are column vectors and sizes match
+    lb = lb(:);
+    ub = ub(:);
+    y_ref = y_ref(:);
+
+    if any(lb < (y_ref - delta)) || any(ub > (y_ref + delta))
+        res = 0;  % robustness violated
+    else
+        res = 1;  % robust
     end
 end
 
 
-
-
-function parsave(modelPath, epsilon, results, outputSets, rT, targets)
+function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing)
     fname = "results/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
-    save(fname, "results", "outputSets", "rT", "targets");
+    save(fname, "results", "outputSets", "rT", "targets", "timing");
 end
