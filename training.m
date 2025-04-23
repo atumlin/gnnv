@@ -23,7 +23,8 @@
 % E: edge features (N x N x D)
 
 %% Settings
-bus_systems = ["ieee24","ieee39","ieee118"];  % Options: 'ieee24', 'ieee39', etc.
+
+bus_systems = ["ieee24","ieee39","ieee118"];  
 
 for b = 1:length(bus_systems)
     bus_sysem = bus_systems(b);
