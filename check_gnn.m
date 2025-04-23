@@ -7,25 +7,30 @@ ANorm = model_data.ANorm;
 E = model_data.E;
 X_test = model_data.X_test;
 Y_test = model_data.Y_test;
+global_std = model_data.global_std;
+global_mean = model_data.global_mean;
+global_std_labels = model_data.global_std_labels;
+global_mean_labels = model_data.global_mean_labels;
 
-idx = 1;
+idx = 2;
 X_input = X_test{idx};
+Y_true = Y_test{idx};
 
 %% Predict
 Y_pred = GINEConv(ANorm, X_input, E, parameters); 
 
 %% Denormalize prediction
-% Y_pred = Y_pred .* global_std_labels + global_mean_labels;  % back to real scale
-% Y_true = Y_true .* global_std_labels + global_mean_labels;
+Y_pred = Y_pred .* global_std + global_mean;  % back to real scale
+Y_true = Y_true .* global_std_labels + global_mean_labels;
 
 
 %% Output
 disp('Predicted Output (node x feature):');
 disp(Y_pred);
 
-% disp('True Output (node x feature):');
-% disp(Y_true);
-% 
+disp('True Output (node x feature):');
+disp(Y_true);
+
 % % Optionally, compare specific features:
 % fprintf('\nVoltage Magnitude Prediction (Column 3):\n');
 % disp(Y_pred(:,3));

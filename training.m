@@ -23,7 +23,7 @@
 % E: edge features (N x N x D)
 
 %% Settings
-bus_system = 'ieee24';  % Options: 'ieee24', 'ieee39', etc.
+bus_system = 'ieee39';  % Options: 'ieee24', 'ieee39', etc.
 
 seed_list = [128]; % How many seeds / various models?
 
