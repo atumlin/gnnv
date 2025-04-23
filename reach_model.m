@@ -11,6 +11,10 @@ function reach_model(modelPath,epsilon)
     w1 = gather(model_data.parameters.mult1.Weights);
     w2 = gather(model_data.parameters.mult2.Weights);
     w3 = gather(model_data.parameters.mult3.Weights);
+
+    ew1 = gather(model_data.parameters.edge1.Weights);
+    ew2 = gather(model_data.parameters.edge2.Weights);
+    ew3 = gather(model_data.parameters.edge3.Weights);
     
     % Extract test graph structure and features
     ANorm = model_data.ANorm;
@@ -55,7 +59,7 @@ function reach_model(modelPath,epsilon)
             reachMethod = 'approx-star';
             L = ReluLayer(); % Create relu layer;
             
-            Y = computeReachability({w1,w2,w3}, L, reachMethod, Xverify, EVerify, AVerify);
+            Y = computeReachability({w1,w2,w3}, {ew1,ew2,ew3}, L, reachMethod, Xverify, EVerify, AVerify);
 
             % store results
             outputSets{i} = Y;
@@ -75,7 +79,7 @@ end
 
 %% Helper Functions 
 
-function Y = computeReachability(weights,L,reachMethod,input,edgeMat,adjMat)
+function Y = computeReachability(weights,edge_weights,L,reachMethod,input,edgeMat,adjMat)
 % weights = weights of GNN ({w1, w2, w3}
 % L = Layer type (ReLU)
 % reachMethod = reachability method for all layers('approx-star is default)
@@ -96,16 +100,18 @@ n = size(adjMat,1);
 % is a diagonal matrix with the perturbations 
 V = Xverify.V; % 24x4x1x97
 c = V(:,:,1,1); % 24x4
+
 % Step 1)  Add features and edge features (adjust c)
 % Need to transform features to match dimensionality for addition 
-newc = addEdgeNodeFeatures(c,Everify); % 24x4
+ew1 = extractdata(edge_weights{1}); 
+newc = addEdgeNodeFeatures(c,Everify,ew1); % 24x4
 V(:,:,1,1) = newc; % 24x4x1x97
+
 % Step 2) Create new star with new c 
 X2 = ImageStar(V, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
-% Step 3) Apply ReLU
-X2b = L.reach(X2, reachMethod);
 
-X3 = X2b.MinkowskiSum(Xverify);
+% Step 3) Apply ReLU
+X3 = L.reach(X2, reachMethod);
 
 % Step 4) Multiply by adjacency 
 % newV = X3.V; % 24x4x1x97
@@ -131,21 +137,26 @@ X4 = ImageStar(newV, X3.C, X3.d, X3.pred_lb, X3.pred_ub);
 V = X4.V; % 24x32x1x97
 c = V(:,:,1,1); % 24x32
 
-newc = addEdgeNodeFeatures(c,Everify); % 24x32
+ew2 = extractdata(edge_weights{2}); 
+newc = addEdgeNodeFeatures(c,Everify,ew2); % 24x32
 V(:,:,1,1) = newc; % 24x32x1x97
 
 X5 = ImageStar(V, X4.C, X4.d, X4.pred_lb, X4.pred_ub);
 
-X5b = L.reach(X5, reachMethod);
+X6 = L.reach(X5, reachMethod);
 
-X6 = X5b.MinkowskiSum(X4);
+newV = squeeze(X6.V); % 24x32x97
 
-newV = X6.V; % 24x32x1x97
+newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x97
 
-newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x1x97
+tempc = newV(:,1:32);
+tempc = tempc + c;
+newV(:,1:32) = tempc; % 24x32x97
 
 W2 = extractdata(weights{2}); % 32x32
-newV = permute(tensorprod(newV, W2, 2, 1), [1 4 2 3]); % 24x32x1x97
+newV = tensorprod(newV, W2, 2, 1); % 24x97x32
+newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x32
+newV = permute(newV, [1 4 3 2]); % 24x32x1x97
 
 X7 = ImageStar(newV, X6.C, X6.d, X6.pred_lb, X6.pred_ub);
 
@@ -154,31 +165,36 @@ X7 = ImageStar(newV, X6.C, X6.d, X6.pred_lb, X6.pred_ub);
 V = X7.V; % 24x32x1x97
 c = V(:,:,1,1); % 24x32
 
-newc = addEdgeNodeFeatures(c,Everify); % 24x32
+ew3 = extractdata(edge_weights{3}); 
+newc = addEdgeNodeFeatures(c,Everify,ew3); % 24x32
 V(:,:,1,1) = newc; % 24x32x1x97
 
 X8 = ImageStar(V, X7.C, X7.d, X7.pred_lb, X7.pred_ub);
 
-X8b = L.reach(X8, reachMethod);
+X9 = L.reach(X8, reachMethod);
 
-X9 = X8b.MinkowskiSum(X4);
+newV = squeeze(X9.V); % 24x32x97
 
-newV = X9.V; % 24x32x1x97
+newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x97
 
-newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x1x97
+tempc = newV(:,1:32);
+tempc = tempc + c;
+newV(:,1:32) = tempc; % 24x32x97
 
 W3 = extractdata(weights{3}); % 32x4
-newV = permute(tensorprod(newV, W3, 2, 1), [1 4 2 3]);  % 24x4x1x97
+newV = tensorprod(newV, W3, 2, 1); % 24x97x4
+newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x4
+newV = permute(newV, [1 4 3 2]); % 24x4x1x97
+
 Y = ImageStar(newV, X9.C, X9.d, X9.pred_lb, X9.pred_ub);
 end
 
-function Z_out = addEdgeNodeFeatures(Z,E)
+function Z_out = addEdgeNodeFeatures(Z,E,W_e)
     % Z: node features (N x F)
     % E: edge features (N x N x D)
 
     [N, F] = size(Z); % Number of nodes (N) and node feature dimension (F)
     D = size(E, 3); % Edge feature dimension (D)
-    W_e = initializeWeights(D, F);
 
     %W_e is linear transform to get edge features in same dim as node feats
     E_transformed = reshape(E, [N*N, D]) * W_e; % (N^2 x D) * (D x F) -> (N^2 x F)
@@ -195,8 +211,4 @@ function Z_out = addEdgeNodeFeatures(Z,E)
     Z_out = sum(Z_agg, 2); % N x 1 x F
     Z_out = squeeze(Z_out); % N x F 
 end 
-
-function W = initializeWeights(input_dim, output_dim)
-    W = randn(input_dim, output_dim) * sqrt(2 / (input_dim + output_dim));
-end
 

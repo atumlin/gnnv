@@ -1,0 +1,3 @@
+Training Results for ieee24 - 2025-04-23_13-00-24
+--------------------------------------
+Seed	Test MSE	Test RMSE	Training Time

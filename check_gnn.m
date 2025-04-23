@@ -1,5 +1,5 @@
 %% Load model and test data
-model_file = 'models/gcn_ieee24_2025-04-23_11-11-14.mat';  % <-- your actual file
+model_file = 'models/gcn_ieee24_2025-04-23_13-09-27.mat';  % <-- your actual file
 model_data = load(model_file);
     
 parameters = model_data.parameters;
@@ -53,19 +53,19 @@ function Y = GINEConv(ANorm, Z1, E, parameters)
     % W1, W2, W3: weight matrices for the MLP at each layer (F -> F_out)
 
     % Layer 1
-    Z2 = GINEConvLayer(ANorm, Z1, E, parameters.mult1.Weights);
+    Z2 = GINEConvLayer(ANorm, Z1, E, parameters.mult1.Weights, parameters.edge1.Weights);
 
     % Layer 2
-    Z3 = GINEConvLayer(ANorm, Z2, E, parameters.mult2.Weights);
+    Z3 = GINEConvLayer(ANorm, Z2, E, parameters.mult2.Weights, parameters.edge2.Weights);
 
     % Layer 3
-    Z4 = GINEConvLayer(ANorm, Z3, E, parameters.mult3.Weights);
+    Z4 = GINEConvLayer(ANorm, Z3, E, parameters.mult3.Weights, parameters.edge3.Weights);
 
-    % Final ouput 
+    % Final output 
     Y = Z4; 
 end
 
-function Z_next = GINEConvLayer(ANorm, Z, E, W)
+function Z_next = GINEConvLayer(ANorm, Z, E, W, W_e)
     % Single GINEConv Layer (Vectorized Version)
     % ANorm: normalized adjacency matrix (N x N)
     % Z: node features (N x F)
@@ -74,8 +74,6 @@ function Z_next = GINEConvLayer(ANorm, Z, E, W)
 
     [N, F] = size(Z); % Number of nodes (N) and node feature dimension (F)
     D = size(E, 3); % Edge feature dimension (D)
-
-    W_e = initializeWeights(D, F);
 
     %W_e is linear transform to get edge features in same dim as node feats
     E_transformed = reshape(E, [N*N, D]) * W_e; % (N^2 x D) * (D x F) -> (N^2 x F)
@@ -88,19 +86,23 @@ function Z_next = GINEConvLayer(ANorm, Z, E, W)
 
     %do the addition and relu so now we have the features associated with every edge
     Z_agg = Z_expanded + E_transformed; % (N x 1 x F) + (N x N x F) -> (N x N x F)
-    Z_agg = relu(Z_agg); % (N x N x F)
 
-    %I think this would work to first use the nxn matrix to only get the relevant features in the nxnxf
-    %Z_agg_sum = pagemtimes(ANorm, Z_agg); % (N x N) * (N x N x F) -> (N x N x F)
+
+    Z_agg = sum(Z_agg, 2); % N x 1 x F
+    Z_agg = squeeze(Z_agg); % N x F 
+
+    Z_agg = relu(Z_agg); % (N x F)
+
+    %Z_agg_sum = pagemtimes(ANorm, Z_agg); % (N x N) * (N x F) -> (N x F)
     ANorm = full(ANorm);
     Z_agg = full(Z_agg);
-    Z_agg_sum = pagemtimes(ANorm, Z_agg);
+    Z_message = pagemtimes(ANorm, Z_agg);
     
-    %then aggregate those edge features that are remaining ie not zeroed out from anorm
-    Z_new = sum(Z_agg_sum, 2); % Sum over the second dimension -> (N x 1 x F)
-    Z_message = reshape(Z_new, [N, F]); % (N x F)
+    % %then aggregate those edge features that are remaining ie not zeroed out from anorm
+    % Z_new = sum(Z_agg_sum, 2); % Sum over the second dimension -> (N x 1 x F)
+    % Z_message = reshape(Z_new, [N, F]); % (N x F)
 
-    epsilon = 0.01;
+    epsilon = 0.00;
     
     %as in GINE it combines that Z message with the original xi
     Z_next = (1 + epsilon) * Z + Z_message;
