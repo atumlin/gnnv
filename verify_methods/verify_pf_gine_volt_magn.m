@@ -1,14 +1,14 @@
-%% Verify the Safety Critical Specification of PF Models (GINEConv)
+%% Verify a Safety Critical Specification of PF Models (GINEConv)
 % We are developing the specification for looking at the appropriate
-% boundaries of voltage magnitude and voltage angle. 
+% boundaries of voltage magnitude.. 
 % Author: Anne Tumlin
 % Date: 04/24/2025
 
-function verify_safety_pf(epsilons, models)
+function verify_pf_gine_volt_magn(epsilons, models, specific_perturbation)
     for m = 1:length(models)
         modelPath = models(m);
 
-        fprintf('\n--- Starting power safety verification for model: %s ---\n', modelPath);
+        fprintf('\n--- Starting voltage magnitude verification for model: %s ---\n', modelPath);
 
         % Load model normalization values
         model_data = load("models/" + modelPath + ".mat");
@@ -26,15 +26,18 @@ function verify_safety_pf(epsilons, models)
             eps = epsilons(k);
             fprintf('Processing epsilon: %.4f ...\n', eps);
 
-            % Load reachability results
-            rdata = load("results/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
+            if specific_perturbation
+                rdata = load("results/gine_sp/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
+            else
+                rdata = load("results/gine/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
+            end
 
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
             tic;
 
             % for i = 1:numel(results)
-            for i = 1:50
+            for i = 1:10
                 Y = rdata.outputSets{i};
                 results{i} = verifyVoltageMagnitude(Y, voltage_idx, v_min, v_max);
             end
@@ -42,14 +45,8 @@ function verify_safety_pf(epsilons, models)
             elapsed = toc;
             fprintf('Finished epsilon %.4f for model %s in %.2f seconds\n', eps, modelPath, elapsed);
 
-            % Save results in a dedicated subfolder
-            safety_results_folder = "results/safety";
-            if ~exist(safety_results_folder, 'dir')
-                mkdir(safety_results_folder);
-            end
-
             % Save results
-            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets, elapsed)
+            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets, elapsed, specific_perturbation)
         end
     end
 end
@@ -92,7 +89,11 @@ function results = verifyVoltageMagnitude(X, feat_idx, v_min, v_max)
     end
 end
 
-function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing)
-    fname = "results/safety/safety_verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
+function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing, specific_perturbation)
+    if specific_perturbation
+        fname = "results/gine_sp/volt_magn_results/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
+    else
+        fname = "results/gine/volt_magn_results/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
+    end
     save(fname, "results", "outputSets", "rT", "targets", "timing");
 end

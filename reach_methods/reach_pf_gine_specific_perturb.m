@@ -3,7 +3,7 @@
 % Author: Anne Tumlin
 % Date: 03/15/2025
 
-function reach_model(modelPath,epsilon)
+function reach_pf_gine_specific_perturb(modelPath,epsilon,features)
     
     model_data = load(modelPath);
     
@@ -37,9 +37,18 @@ function reach_model(modelPath,epsilon)
             % Adjacency matrix does not change
             AVerify = ANorm;
 
-            % Get the input set
-            lb = extractdata(X-epsilon(k));
-            ub = extractdata(X+epsilon(k));
+            % Extract original data from dlarray
+            X_data = extractdata(X);
+            
+            % Initialize lb and ub as exact copies (no perturbation)
+            lb = X_data;
+            ub = X_data;
+            
+            % Apply perturbation ONLY to selected features
+            for f = features
+                lb(:, f) = X_data(:, f) - epsilon(k);
+                ub(:, f) = X_data(:, f) + epsilon(k);
+            end
             Xverify = ImageStar(lb,ub);
 
             % What to do about edge features? 
@@ -71,7 +80,7 @@ function reach_model(modelPath,epsilon)
 
          % Save verification results
         [~, baseName, ~] = fileparts(modelPath);  % removes 'models/' and '.mat'
-        save("results/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
+        save("results/gine_sp/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
              "outputSets", "targets", "rT");
     end
     

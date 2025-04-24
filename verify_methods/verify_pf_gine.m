@@ -1,10 +1,11 @@
 %% Verify the robustness of GINEConv models 
 % This code is specifically looking at PF Analysis using GINEConv Layers.
-% This is going to be a regression task. 
+% It is verifying the GINE layers within some boundary defined by RMSE of
+% the models. 
 % Author: Anne Tumlin
 % Date: 04/02/2025
 
-function verify_gine(epsilons, models)
+function verify_pf_gine(epsilons, models, specific_perturbation)
     for m = 1:length(models)
         modelPath = models(m);
 
@@ -20,7 +21,11 @@ function verify_gine(epsilons, models)
             eps = epsilons(k);
             fprintf('Processing epsilon: %.4f ...\n', eps);
             % Load results
-            rdata = load("results/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
+            if specific_perturbation
+                rdata = load("results/gine_sp/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
+            else
+                rdata = load("results/gine/verified_nodes_" + modelPath + "_eps" + string(eps) + ".mat");
+            end
 
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
@@ -38,7 +43,7 @@ function verify_gine(epsilons, models)
             fprintf('Finished epsilon %.4f for model %s in %.2f seconds\n', eps, modelPath, elapsed);
 
             % Save results
-            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets, elapsed, rmse);
+            parsave(modelPath, eps, results, rdata.outputSets, rdata.rT, rdata.targets, elapsed, rmse, specific_perturbation);
         end
     end
 end
@@ -98,8 +103,12 @@ function res = checkViolated_regression(Set, y_ref, delta)
     end
 end
 
-function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing, rmse)
-    fname = "results/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
+function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing, rmse, specific_perturbation)
+    if specific_perturbation
+        fname = "results/gine_sp/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
+    else
+        fname = "results/gine/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
+    end
     save(fname, "results", "outputSets", "rT", "targets", "timing", "rmse");
 end
 
