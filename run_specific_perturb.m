@@ -1,29 +1,28 @@
-%% Script to run verification of GINEConv PF models.
-
-%% Start with getting reachability outputs
-% Set parameters here.
-bus_systems = ["ieee24", "ieee39", "ieee118"];
+bus_systems = ["ieee24"];
 epsilons = [0.01];
 
 % Loop over bus systems
 for b = 1:length(bus_systems)
     bus_system = bus_systems(b);
 
-    % % Get all matching files for this bus system
-    % model_files = dir(fullfile("models", "gcn_" + bus_system + "_*.mat"));
-    % 
-    % % Loop over epsilon values
-    % for e = 1:length(epsilons)
-    %     epsilon = epsilons(e);
-    % 
-    %     % Loop over all matching files
-    %     for f = 1:length(model_files)
-    %         model_path = fullfile("models", model_files(f).name);
-    % 
-    %         fprintf('Running: %s, epsilon = %.4f\n', model_files(f).name, epsilon);
-    %         reach_model(model_path, epsilon);
-    %     end
-    % end
+    % Get all matching files for this bus system
+    model_files = dir(fullfile("models", "gcn_" + bus_system + "_*.mat"));
+
+    % Features to perturb
+    features = [1,2]; % In this case perturb active and reactive power. 
+
+    % Loop over epsilon values
+    for e = 1:length(epsilons)
+        epsilon = epsilons(e);
+
+        % Loop over all matching files
+        for f = 1:length(model_files)
+            model_path = fullfile("models", model_files(f).name);
+
+            fprintf('Running: %s, epsilon = %.4f\n', model_files(f).name, epsilon);
+            reach_specific_perturb(model_path,epsilon,features);
+        end
+    end
 
     % Get model filenames for this bus system
     files = dir(fullfile("models", "gcn_" + bus_system + "_*.mat"));
@@ -83,7 +82,7 @@ for b = 1:length(bus_systems)
         % Write human-readable text summary
         summary_txt = "results/summary_Linf_" + model_path + ".txt";
         fileID = fopen(summary_txt, 'w');
-        fprintf(fileID, 'Robustness Summary for Model: %s\n', model_path);
+        fprintf(fileID, 'Robustness Summary for Model w/ Specific Perturbed Features: %s\n', model_path);
         fprintf(fileID, 'Model RMSE: %.4f\n\n', rmse_value);
         fprintf(fileID, 'Epsilon | Robust   Unknown   NotRobust   Total    Time (sec)\n');
         for k = 1:eN

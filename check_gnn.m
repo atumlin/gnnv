@@ -12,7 +12,7 @@ global_mean = model_data.global_mean;
 global_std_labels = model_data.global_std_labels;
 global_mean_labels = model_data.global_mean_labels;
 
-idx = 2;
+idx = 1;
 X_input = X_test{idx};
 Y_true = Y_test{idx};
 
@@ -20,9 +20,8 @@ Y_true = Y_test{idx};
 Y_pred = GINEConv(ANorm, X_input, E, parameters); 
 
 %% Denormalize prediction
-Y_pred = Y_pred .* global_std + global_mean;  % back to real scale
+Y_pred = Y_pred .* global_std_labels + global_mean_labels;
 Y_true = Y_true .* global_std_labels + global_mean_labels;
-
 
 %% Output
 disp('Predicted Output (node x feature):');

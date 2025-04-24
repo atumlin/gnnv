@@ -1,0 +1,5 @@
+Voltage Magnitude Safety Summary for Model: gcn_ieee24_2025-04-23_13-09-27
+
+Epsilon | Robust   Unknown   NotRobust   Total    Time (sec)
+ 0.0010  |  0.360    0.000     0.640     1200     44.11
+ 0.1000  |  0.351    0.000     0.649     1200     47.07

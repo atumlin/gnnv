@@ -1,9 +1,9 @@
-%% Script to run verification of GINEConv PF models.
+%% Script to run safety specification verification of GINEConv PF models.
 
-%% Start with getting reachability outputs
-% Set parameters here.
-bus_systems = ["ieee24", "ieee39", "ieee118"];
-epsilons = [0.01];
+%% Set parameters here.
+bus_systems = ["ieee24"];
+epsilons = [0.001, 0.1];
+% epsilons = [0.001, 0.01, 0.05, 0.1];
 
 % Loop over bus systems
 for b = 1:length(bus_systems)
@@ -25,18 +25,18 @@ for b = 1:length(bus_systems)
     %     end
     % end
 
-    % Get model filenames for this bus system
-    files = dir(fullfile("models", "gcn_" + bus_system + "_*.mat"));
-    models = strings(length(files), 1);
-    for f = 1:length(files)
-        [~, name, ~] = fileparts(files(f).name);
-        models(f) = name;
-    end
+    % % Get model filenames for this bus system
+    % files = dir(fullfile("models", "gcn_" + bus_system + "_*.mat"));
+    % models = strings(length(files), 1);
+    % for f = 1:length(files)
+    %     [~, name, ~] = fileparts(files(f).name);
+    %     models(f) = name;
+    % end
+    % 
+    % % Call safety specification verification function
+    % verify_safety_pf(epsilons, models);
 
-    % Call your verification function
-    verify_gine(epsilons, models);
-
-    % Process results for each model
+    % Process safety results for each model
     for m = 1:length(models)
         model_path = models(m);
         eN = length(epsilons);
@@ -45,15 +45,14 @@ for b = 1:length(bus_systems)
         unknown_counts   = zeros(eN,1);
         notrobust_counts = zeros(eN,1);
         total_outputs    = zeros(eN,1);
-        timings          = NaN(eN,1); 
-        rmse_value       = NaN;
+        timings          = NaN(eN,1);
 
         for k = 1:eN
             eps = epsilons(k);
-            result_file = "results/verified_nodes_" + model_path + "_eps" + string(eps) + ".mat";
+            result_file = "results/safety/safety_verified_nodes_" + model_path + "_eps" + string(eps) + ".mat";
 
             if exist(result_file, 'file') == 2
-                data = load(result_file);  % loads: results, targets, rT, timing, rmse
+                data = load(result_file);  % loads: results, outputSets, targets, elapsed, eps
                 results = data.results;
 
                 for i = 1:length(results)
@@ -64,27 +63,21 @@ for b = 1:length(bus_systems)
                     total_outputs(k)    = total_outputs(k)    + numel(res);
                 end
 
-                if isfield(data, 'timing')
-                    timings(k) = data.timing;
-                end
-                if isfield(data, 'rmse')
-                    rmse_value = data.rmse;
-                end
+                timings(k) = data.timing;
             else
                 warning("Missing result file: %s", result_file);
             end
         end
 
-        % Save .mat summary with timing and RMSE
-        save("results/summary_Linf_" + model_path + ".mat", ...
+        % Save .mat summary
+        save("results/safety/summary_safety_" + model_path + ".mat", ...
             "robust_counts", "unknown_counts", "notrobust_counts", ...
-            "total_outputs", "timings", "rmse_value");
+            "total_outputs", "timings");
 
         % Write human-readable text summary
-        summary_txt = "results/summary_Linf_" + model_path + ".txt";
+        summary_txt = "results/safety/summary_safety_" + model_path + ".txt";
         fileID = fopen(summary_txt, 'w');
-        fprintf(fileID, 'Robustness Summary for Model: %s\n', model_path);
-        fprintf(fileID, 'Model RMSE: %.4f\n\n', rmse_value);
+        fprintf(fileID, 'Voltage Magnitude Safety Summary for Model: %s\n\n', model_path);
         fprintf(fileID, 'Epsilon | Robust   Unknown   NotRobust   Total    Time (sec)\n');
         for k = 1:eN
             if total_outputs(k) > 0
