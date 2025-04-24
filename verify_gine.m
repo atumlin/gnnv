@@ -27,8 +27,7 @@ function verify_gine(epsilons, models)
             tic; 
             delta = rmse*2; % 95% CI-like width
 
-            % for i = 1:numel(results)
-            for i = 1:10
+            for i = 1:numel(results)
                 Y = rdata.outputSets{i};
                 label = rdata.targets{i};
                 results{i} = verifyNode(Y, label, delta);
