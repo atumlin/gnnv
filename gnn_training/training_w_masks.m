@@ -478,14 +478,18 @@ function [loss,gradients] = modelLoss(ANorm, X, E, parameters, T, node_type)
     % Generate mask using true node type
     mask = create_output_mask(node_type);
 
-    % Squared error
+     % Main loss (only on meaningful outputs)
     errors = (Y_pred - T).^2;
-
-    % Apply the mask
     masked_loss = sum(mask .* errors, 'all') / sum(mask, 'all');
 
-    % Compute gradients
-    loss = masked_loss;
+    % Regularization loss (encourage zeros)
+    zero_mask = (T == 0);
+    zero_reg_loss = sum((Y_pred .* zero_mask).^2, 'all') / max(sum(zero_mask, 'all'), 1);
+
+    % Combine
+    alpha = 0.01;  % or start with 0.005 if you want even softer
+    loss = masked_loss + alpha * zero_reg_loss;
+
     gradients = dlgradient(loss, parameters);
 end
 
