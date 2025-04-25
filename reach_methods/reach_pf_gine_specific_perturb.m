@@ -81,7 +81,7 @@ function reach_pf_gine_specific_perturb(modelPath,epsilon,features)
          % Save verification results
         [~, baseName, ~] = fileparts(modelPath);  % removes 'models/' and '.mat'
         save("results/gine_sp/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
-             "outputSets", "targets", "rT");
+             "outputSets", "targets", "rT", '-v7.3');
     end
     
 end

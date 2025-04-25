@@ -39,13 +39,13 @@ for b = 1:length(bus_systems)
     verify_pf_gine(epsilons, models, specific_perturbation);
 
     % Process verification results
-    process_results(epsilons,models, specific_perturbation)
+    process_pf_results(epsilons, models, specific_perturbation);
 
     % Call safety specification verification function
     verify_pf_gine_volt_magn(epsilons, models, specific_perturbation);
 
     % Process safety results for each model
-    process_volt_magn_results(epsilons,models, specific_perturbation);
+    process_volt_magn_results(epsilons, models, specific_perturbation);
 end
 
 end

@@ -30,7 +30,7 @@ function verify_pf_gine(epsilons, models, specific_perturbation)
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
             tic; 
-            delta = rmse*2; % 95% CI-like width
+            delta = rmse; 
 
             % for i = 1:numel(results)
             for i = 1:10
@@ -109,7 +109,7 @@ function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing, r
     else
         fname = "results/gine/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
     end
-    save(fname, "results", "outputSets", "rT", "targets", "timing", "rmse");
+    save(fname, "results", "outputSets", "rT", "targets", "timing", "rmse", '-v7.3');
 end
 
 function rmse = get_rmse_from_log(bus_system, timestamp)

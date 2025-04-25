@@ -1,8 +1,4 @@
-% Process verification results for reachability results 
-% and write summaries to results/safety directory.
-
-function process_results(epsilons,models,specific_perturbation)
-
+function process_pf_results(epsilons,models,specific_perturbation)
     for m = 1:length(models)
         model_path = models(m);
         eN = length(epsilons);

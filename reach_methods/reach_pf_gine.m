@@ -72,7 +72,8 @@ function reach_pf_gine(modelPath,epsilon)
          % Save verification results
         [~, baseName, ~] = fileparts(modelPath);  % removes 'models/' and '.mat'
         save("results/gine/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
-             "outputSets", "targets", "rT");
+            "outputSets", "targets", "rT", '-v7.3');
+
     end
     
 end

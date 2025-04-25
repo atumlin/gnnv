@@ -95,5 +95,5 @@ function parsave(modelPath, epsilon, results, outputSets, rT, targets, timing, s
     else
         fname = "results/gine/volt_magn_results/verified_nodes_" + modelPath + "_eps" + string(epsilon) + ".mat";
     end
-    save(fname, "results", "outputSets", "rT", "targets", "timing");
+    save(fname, "results", "outputSets", "rT", "targets", "timing", '-v7.3');
 end

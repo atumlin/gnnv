@@ -24,7 +24,7 @@
 
 %% Settings
 
-bus_systems = ["ieee24","ieee39","ieee118"];  
+bus_systems = ["ieee39"];  
 
 for b = 1:length(bus_systems)
     bus_system = bus_systems(b);
@@ -86,7 +86,13 @@ for b = 1:length(bus_systems)
         global_std = std(cell2mat(X.Xpf(:)), 0, 1);
         global_mean_labels = mean(cell2mat(Y.Y_polarpf(:)), 1);
         global_std_labels = std(cell2mat(Y.Y_polarpf(:)), 0, 1);
-        
+
+        % Store original node types (4th column) before normalization
+        node_types = cell(numel(X.Xpf), 1);
+        for i = 1:numel(X.Xpf)
+            node_types{i} = X.Xpf{i}(:,4);  % column 4 is node type
+        end
+
         % Normalize each snapshot
         for i = 1:numel(X.Xpf)
             X.Xpf{i} = (X.Xpf{i} - global_mean) ./ global_std;
@@ -94,7 +100,7 @@ for b = 1:length(bus_systems)
         end
         
         % Split Data Train, Test, Validation
-        maxSnapshots = 20000; % Define the maximum number of snapshots to use
+        maxSnapshots = 1000; % Define the maximum number of snapshots to use
         
         numObs = min(numel(X.Xpf), maxSnapshots); % Use the smaller value between maxSnapshots and the total available snapshots
         shuffle_idx = randperm(numObs);
@@ -124,6 +130,8 @@ for b = 1:length(bus_systems)
         Y_val = Y.Y_polarpf(val_idx);
         X_test = X.Xpf(test_idx);
         Y_test = Y.Y_polarpf(test_idx);
+
+    
         
         %% Model Training 
     
@@ -161,10 +169,10 @@ for b = 1:length(bus_systems)
         parameters.edge3.Weights = dlarray(E3);
     
         % Training hyperparameters
-        num_epochs = 50;
+        num_epochs = 10;
         lr = 0.01;
         % epsilon = 0.01;
-        val_freq = 10;
+        val_freq = 5;
         
         % Setup monitor 
         monitor = trainingProgressMonitor( ...
@@ -191,7 +199,8 @@ for b = 1:length(bus_systems)
                     Y = gpuArray(Y);
                 end
         
-                [loss,gradients] = dlfeval(@modelLoss,ANorm,X,E,parameters,Y);
+                node_type = node_types{train_idx(i)};
+                [loss,gradients] = dlfeval(@modelLoss,ANorm,X,E,parameters,Y,node_type);
     
                 % Move gradients to GPU (if not already)
                 if canUseGPU()
@@ -215,7 +224,8 @@ for b = 1:length(bus_systems)
                 end
         
                 % Compute validation loss (without gradient computation)
-                [vloss,vgradients] = dlfeval(@modelLoss,ANorm,Xv,E,parameters,Yv);
+                node_type_val = node_types{val_idx(i)};
+                [vloss,~] = dlfeval(@modelLoss,ANorm,Xv,E,parameters,Yv,node_type_val);
                 val_loss = val_loss + vloss;
             end
             val_loss = val_loss / numel(X_val); % Average validation loss
@@ -235,7 +245,8 @@ for b = 1:length(bus_systems)
             Xt = X_test{i};
             Yt = Y_test{i};
             % Compute test loss (without gradient computation)
-            [mse_loss,tgradients] = dlfeval(@modelLoss,ANorm,Xt,E,parameters,Yt);
+            node_type_test = node_types{test_idx(i)};
+            [mse_loss,~] = dlfeval(@modelLoss,ANorm,Xt,E,parameters,Yt,node_type_test);
             test_mse = test_mse + mse_loss;
         end
         test_mse = test_mse / numel(X_test); % Average test loss
@@ -460,10 +471,43 @@ function out = relu(x)
     out = max(0, x); % Element-wise maximum between 0 and the input
 end
 
-function [loss,gradients] = modelLoss(ANorm,X,E,parameters,T)
+function [loss,gradients] = modelLoss(ANorm, X, E, parameters, T, node_type)
+    % Compute prediction
     Y_pred = GINEConv(ANorm, X, E, parameters);
-    loss = mean((Y_pred - T).^2, 'all');
+
+    % Generate mask using true node type
+    mask = create_output_mask(node_type);
+
+    % Squared error
+    errors = (Y_pred - T).^2;
+
+    % Apply the mask
+    masked_loss = sum(mask .* errors, 'all') / sum(mask, 'all');
+
+    % Compute gradients
+    loss = masked_loss;
     gradients = dlgradient(loss, parameters);
+end
+
+
+function mask = create_output_mask(node_types)
+    % node_types: N x 1 vector (not from X anymore)
+    N = length(node_types);
+    mask = zeros(N, 4, 'like', node_types);
+
+    for i = 1:N
+        switch round(node_types(i))
+            case 1  % PQ
+                mask(i, 3) = 1;  % Voltage mag
+                mask(i, 4) = 1;  % Voltage angle
+            case 2  % PV
+                mask(i, 2) = 1;  % Qg
+                mask(i, 4) = 1;  % Voltage angle
+            case 3  % Slack
+                mask(i, 1) = 1;  % Pg
+                mask(i, 2) = 1;  % Qg
+        end
+    end
 end
 
 % Check if GPU is available to use 
