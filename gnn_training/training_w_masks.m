@@ -130,8 +130,10 @@ for b = 1:length(bus_systems)
         Y_val = Y.Y_polarpf(val_idx);
         X_test = X.Xpf(test_idx);
         Y_test = Y.Y_polarpf(test_idx);
-
-    
+        
+        node_types_train = node_types(train_idx);
+        node_types_val   = node_types(val_idx);
+        node_types_test  = node_types(test_idx);
         
         %% Model Training 
     
@@ -199,8 +201,8 @@ for b = 1:length(bus_systems)
                     Y = gpuArray(Y);
                 end
         
-                node_type = node_types{train_idx(i)};
-                [loss,gradients] = dlfeval(@modelLoss,ANorm,X,E,parameters,Y,node_type);
+                nodetype = node_types_train{train_idx(i)};
+                [loss,gradients] = dlfeval(@modelLoss,ANorm,X,E,parameters,Y,nodetype,global_std_labels,global_mean_labels);
     
                 % Move gradients to GPU (if not already)
                 if canUseGPU()
@@ -224,8 +226,8 @@ for b = 1:length(bus_systems)
                 end
         
                 % Compute validation loss (without gradient computation)
-                node_type_val = node_types{val_idx(i)};
-                [vloss,~] = dlfeval(@modelLoss,ANorm,Xv,E,parameters,Yv,node_type_val);
+                nodetypeval = node_types_val{val_idx(i)};
+                [vloss,~] = dlfeval(@modelLoss,ANorm,Xv,E,parameters,Yv,nodetypeval,global_std_labels,global_mean_labels);
                 val_loss = val_loss + vloss;
             end
             val_loss = val_loss / numel(X_val); % Average validation loss
@@ -245,8 +247,8 @@ for b = 1:length(bus_systems)
             Xt = X_test{i};
             Yt = Y_test{i};
             % Compute test loss (without gradient computation)
-            node_type_test = node_types{test_idx(i)};
-            [mse_loss,~] = dlfeval(@modelLoss,ANorm,Xt,E,parameters,Yt,node_type_test);
+            nodetypetest = node_types_test{test_idx(i)};
+            [mse_loss,~] = dlfeval(@modelLoss,ANorm,Xt,E,parameters,Yt,nodetypetest,global_std_labels,global_mean_labels);
             test_mse = test_mse + mse_loss;
         end
         test_mse = test_mse / numel(X_test); % Average test loss
@@ -471,7 +473,7 @@ function out = relu(x)
     out = max(0, x); % Element-wise maximum between 0 and the input
 end
 
-function [loss,gradients] = modelLoss(ANorm, X, E, parameters, T, node_type)
+function [loss,gradients] = modelLoss(ANorm, X, E, parameters, T, node_type,global_std_labels,global_mean_labels)
     % Compute prediction
     Y_pred = GINEConv(ANorm, X, E, parameters);
 
@@ -482,8 +484,10 @@ function [loss,gradients] = modelLoss(ANorm, X, E, parameters, T, node_type)
     errors = (Y_pred - T).^2;
     masked_loss = sum(mask .* errors, 'all') / sum(mask, 'all');
 
+    Y_true = T .* global_std_labels + global_mean_labels;
+
     % Regularization loss (encourage zeros)
-    zero_mask = (T == 0);
+    zero_mask = (Y_true == 0);
     zero_reg_loss = sum((Y_pred .* zero_mask).^2, 'all') / max(sum(zero_mask, 'all'), 1);
 
     % Combine
