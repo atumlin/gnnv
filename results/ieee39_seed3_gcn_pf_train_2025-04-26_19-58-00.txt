@@ -1,5 +1,0 @@
-Training Results for ieee39 - 2025-04-26_19-58-00
---------------------------------------
-Seed	Test MSE	Test RMSE	Training Time
-3	0.071360	0.267133	3686.79
-
