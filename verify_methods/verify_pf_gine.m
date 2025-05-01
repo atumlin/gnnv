@@ -30,10 +30,10 @@ function verify_pf_gine(epsilons, models, specific_perturbation)
             % Per-node verification
             results = cell(length(rdata.outputSets), 1);
             tic; 
-            delta = rmse; 
+            delta = rmse*2; 
 
-            % for i = 1:numel(results)
-            for i = 1:10
+            for i = 1:numel(results)
+            % for i = 1:10
                 Y = rdata.outputSets{i};
                 label = rdata.targets{i};
                 results{i} = verifyNode(Y, label, delta);

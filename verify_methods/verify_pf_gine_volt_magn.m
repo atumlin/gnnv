@@ -36,8 +36,8 @@ function verify_pf_gine_volt_magn(epsilons, models, specific_perturbation)
             results = cell(length(rdata.outputSets), 1);
             tic;
 
-            % for i = 1:numel(results)
-            for i = 1:10
+            for i = 1:numel(results)
+            % for i = 1:10
                 Y = rdata.outputSets{i};
                 results{i} = verifyVoltageMagnitude(Y, voltage_idx, v_min, v_max);
             end
