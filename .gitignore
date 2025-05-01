@@ -1,3 +1,6 @@
 *.asv
 **/gine/
 **/ginesp/
+ieee118_data/
+ieee24_data/
+ieee39_data/
