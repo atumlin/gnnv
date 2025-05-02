@@ -42,7 +42,7 @@ atomDataTest = atomData(idxTest,:);
 
 %% Verify models
 % Verify one model at a time
-parfor k=1:length(seeds)
+for k=1:length(seeds)
 
     % get model
     modelPath = "gcn_"+string(seeds(k));

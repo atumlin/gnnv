@@ -1,5 +1,6 @@
 %% Train multiple models to evaluate and certify accuracy and certified accuracy
-% For now, do 5 different random seeds and save the model to analyze later
+% Author: Diego Manzanas Lopez
+% Edited by: Anne Tumlin (April 2025)
 
 %% Download data and preprocess it
 
