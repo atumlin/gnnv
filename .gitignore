@@ -1,7 +1,10 @@
 *.asv
 **/gine/
-**/ginesp/
+**/gine_sp/
 ieee118_data/
 ieee24_data/
 ieee39_data/
 models/
+results/
+figs/
+*.mat
