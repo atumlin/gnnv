@@ -28,8 +28,9 @@ function reach_pf_gine(modelPath,epsilon)
     rT = {};
 
     for k = 1:length(epsilon)
-
-        for i = 1:numel(X_test)
+        tic;
+        for i = 1:1
+        % for i = 1:numel(X_test)
 
             X = X_test{i};
             X = dlarray(X);
@@ -76,11 +77,15 @@ function reach_pf_gine(modelPath,epsilon)
             targets{i} = target_vals;
             rT{i} = toc(t);
     
-         end
+        end
+        elapsed = toc;
+        fprintf("Reachable set computation took %.4f seconds.\n", elapsed);
 
          % Save verification results
         [~, baseName, ~] = fileparts(modelPath);  % removes 'models/' and '.mat'
-        save("results/gine/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
+        % save("results/gine/verified_nodes_" + baseName + "_eps" + string(epsilon(k)) + ".mat", ...
+        %     "outputSets", "targets", "rT", '-v7.3');
+        save("results/gine/verified_nodes_" + baseName + ".mat", ...
             "outputSets", "targets", "rT", '-v7.3');
 
     end
@@ -108,96 +113,111 @@ n = size(adjMat,1);
 
 % This is the transformation of c and V vectors where c is V0 and V1...Vf
 % is a diagonal matrix with the perturbations 
-V = Xverify.V; % 24x4x1x97
-c = V(:,:,1,1); % 24x4
+V = Xverify.V; % nodes x features x 1 x terms
 
 % Step 1)  Add features and edge features (adjust c)
 % Need to transform features to match dimensionality for addition 
 ew1 = extractdata(edge_weights{1}); 
-newc = addEdgeNodeFeatures(c,Everify,ew1); % 24x4
-V(:,:,1,1) = newc; % 24x4x1x97
+V = addEdgeNodeFeaturesStarSet(V, Everify, ew1);
 
-% Step 2) Create new star with new c 
+% Step 2) Create new star with new V
 X2 = ImageStar(V, Xverify.C, Xverify.d, Xverify.pred_lb, Xverify.pred_ub);
 
 % Step 3) Apply ReLU
 X3 = L.reach(X2, reachMethod);
-% X3b = X3.MinkowskiSum(Xverify);
 
 % Step 4) Multiply by adjacency 
-% newV = X3.V; % 24x4x1x97
-newV = squeeze(X3.V); % 24x4x97
-Averify_full = full(Averify); % 24x24
-newV = tensorprod(Averify_full, newV, 2, 1); % 24x4x97
+newV = squeeze(X3.V); % nodes x features x terms 
+Averify_full = full(Averify); % nodes x nodes
+newV = tensorprod(Averify_full, newV, 2, 1); % nodes x features x terms 
 
 % Step 5) Add updated features with original features 
-newc = newV(:,1:4);
-newc = newc + c;
-newV(:,1:4) = newc; % 24x4x97
+sz = size(newV);
+newV = reshape(newV, [sz(1), sz(2), 1, sz(3)]);  % nodes × features × 1 × terms
+Xagg = ImageStar(newV, X3.C, X3.d, X3.pred_lb, X3.pred_ub);
 
-% Step 6) Multiply by weights
-W1 = extractdata(weights{1}); % 4x32
-newV = tensorprod(newV, W1, 2, 1); % 24x97x32
-newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x32
-newV = permute(newV, [1 4 3 2]); % 24x32x1x97
+% Ensure both ImageStars have the same number of predicate variables
+n_preds = size(Xagg.V, 4);
+Xverify_padded = padStarSetToMatch(Xverify, n_preds);
 
-% Step 7) Create new ImageStar
-X4 = ImageStar(newV, X3.C, X3.d, X3.pred_lb, X3.pred_ub);
+% Now safe to add
+Xskip = Xagg.MinkowskiSum(Xverify_padded);
+
+% Step 7) Apply final weights dynamically
+W1 = extractdata(weights{1});  % in dims: [in_feats x out_feats]
+newV = tensorprod(Xskip.V, W1, 2, 1);  % Contract over feature dim
+
+% Reshape to 4D for ImageStar: [nodes × terms × 1 × out_feats]
+% newV should now be [nodes × 1 x terms × out_feats]
+newV = permute(newV, [1 4 2 3]);  % nodes × out_feats × 1 × terms
+
+% Step 8) Final ImageStar
+X4 = ImageStar(newV, Xskip.C, Xskip.d, Xskip.pred_lb, Xskip.pred_ub);
 
 %%%%%%%%% Layer 2 %%%%%%%%%%%
-V = X4.V; % 24x32x1x97
-c = V(:,:,1,1); % 24x32
+V = X4.V;  % nodes x features x 1 x terms
 
 ew2 = extractdata(edge_weights{2}); 
-newc = addEdgeNodeFeatures(c,Everify,ew2); % 24x32
-V(:,:,1,1) = newc; % 24x32x1x97
+
+V = addEdgeNodeFeaturesStarSet(V, Everify, ew2);
 
 X5 = ImageStar(V, X4.C, X4.d, X4.pred_lb, X4.pred_ub);
 
 X6 = L.reach(X5, reachMethod);
 
-newV = squeeze(X6.V); % 24x32x97
+newV = squeeze(X6.V);  % nodes x features x terms 
 
-newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x97
+newV = tensorprod(Averify_full, newV, 2, 1);  % nodes x features x terms 
 
-tempc = newV(:,1:32);
-tempc = tempc + c;
-newV(:,1:32) = tempc; % 24x32x97
+sz = size(newV);
+newV = reshape(newV, [sz(1), sz(2), 1, sz(3)]);  % nodes × features × 1 × terms
+Xagg = ImageStar(newV, X6.C, X6.d, X6.pred_lb, X6.pred_ub);
 
-W2 = extractdata(weights{2}); % 32x32
-newV = tensorprod(newV, W2, 2, 1); % 24x97x32
-newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x32
-newV = permute(newV, [1 4 3 2]); % 24x32x1x97
+% Ensure both ImageStars have the same number of predicate variables
+n_preds = size(Xagg.V, 4);
+X_padded = padStarSetToMatch(X4, n_preds);
 
-X7 = ImageStar(newV, X6.C, X6.d, X6.pred_lb, X6.pred_ub);
+% Now safe to add
+Xskip = Xagg.MinkowskiSum(X_padded);
+
+W2 = extractdata(weights{2});  % in dims: [in_feats x out_feats]
+newV = tensorprod(Xskip.V, W2, 2, 1);  % Contract over feature dim
+newV = permute(newV, [1 4 2 3]);  % nodes × out_feats × 1 × terms
+
+X7 = ImageStar(newV, Xskip.C, Xskip.d, Xskip.pred_lb, Xskip.pred_ub);
 
 %%%%%%%%% Layer 3 %%%%%%%%%%%
 
-V = X7.V; % 24x32x1x97
-c = V(:,:,1,1); % 24x32
+V = X7.V; % nodes x features x 1 x terms
 
 ew3 = extractdata(edge_weights{3}); 
-newc = addEdgeNodeFeatures(c,Everify,ew3); % 24x32
-V(:,:,1,1) = newc; % 24x32x1x97
+
+V = addEdgeNodeFeaturesStarSet(V, Everify, ew3);
 
 X8 = ImageStar(V, X7.C, X7.d, X7.pred_lb, X7.pred_ub);
 
 X9 = L.reach(X8, reachMethod);
 
-newV = squeeze(X9.V); % 24x32x97
+newV = squeeze(X9.V); % nodes x features x terms 
 
-newV = tensorprod(Averify_full, newV, 2, 1); % 24x32x97
+newV = tensorprod(Averify_full, newV, 2, 1); % nodes x features x terms 
 
-tempc = newV(:,1:32);
-tempc = tempc + c;
-newV(:,1:32) = tempc; % 24x32x97
+sz = size(newV);
+newV = reshape(newV, [sz(1), sz(2), 1, sz(3)]);  % nodes × features × 1 × terms
+Xagg = ImageStar(newV, X9.C, X9.d, X9.pred_lb, X9.pred_ub);
 
-W3 = extractdata(weights{3}); % 32x4
-newV = tensorprod(newV, W3, 2, 1); % 24x97x4
-newV = reshape(newV, [size(newV,1), size(newV,2), 1, size(newV,3)]); %24x97x1x4
-newV = permute(newV, [1 4 3 2]); % 24x4x1x97
+% Ensure both ImageStars have the same number of predicate variables
+n_preds = size(Xagg.V, 4);
+X_padded = padStarSetToMatch(X7, n_preds);
 
-Y = ImageStar(newV, X9.C, X9.d, X9.pred_lb, X9.pred_ub);
+% Now safe to add
+Xskip = Xagg.MinkowskiSum(X_padded);
+
+W3 = extractdata(weights{3});  % in dims: [in_feats x out_feats]
+newV = tensorprod(Xskip.V, W3, 2, 1);  % Contract over feature dim
+newV = permute(newV, [1 4 2 3]);  % nodes × out_feats × 1 × terms
+
+Y = ImageStar(newV, Xskip.C, Xskip.d, Xskip.pred_lb, Xskip.pred_ub);
 end
 
 function Z_out = addEdgeNodeFeatures(Z,E,W_e)
@@ -223,3 +243,59 @@ function Z_out = addEdgeNodeFeatures(Z,E,W_e)
     Z_out = squeeze(Z_out); % N x F 
 end 
 
+function V_out = addEdgeNodeFeaturesStarSet(V_in, E, W_e)
+    % V_in: node features from ImageStar.V -> size [N x F x 1 x K]
+    % E: edge features [N x N x D]
+    % W_e: edge weight matrix [D x F]
+    
+    [N, F, ~, K] = size(V_in);  % N nodes, F features, K predicate terms
+    D = size(E, 3);             % edge feature dimension
+
+    V_out = zeros(N, F, 1, K);  % same size as V_in
+
+    % Pre-transform edges once
+    E_transformed = reshape(E, [N*N, D]) * W_e;      % [N^2 x F]
+    E_transformed = reshape(E_transformed, [N, N, F]);  % [N x N x F]
+
+    for k = 1:K
+        Z = V_in(:,:,1,k);  % [N x F]
+
+        % Expand Z for broadcasting
+        Z_expanded = reshape(Z, [N, 1, F]);  % [N x 1 x F]
+
+        % Add edge features to node features
+        Z_agg = Z_expanded + E_transformed;  % [N x N x F]
+
+        % Aggregate messages
+        Z_out = sum(Z_agg, 2);  % [N x 1 x F]
+        V_out(:,:,1,k) = squeeze(Z_out);  % [N x F]
+    end
+end
+
+
+function Xpad = padStarSetToMatch(X, targetNumPreds)
+    % Pads the predicate terms (4th dim of V) to match targetNumPreds
+
+    V = X.V;  % size: N x F x 1 x K
+    [N, F, ~, K] = size(V);
+
+    if K == targetNumPreds
+        Xpad = X;
+        return;
+    elseif K > targetNumPreds
+        error("Cannot pad to smaller size. X already has more predicate variables.");
+    end
+
+    % Pad V with zeros along the 4th dim
+    padV = zeros(N, F, 1, targetNumPreds - K);
+    V_new = cat(4, V, padV);  % N x F x 1 x targetNumPreds
+
+    % Pad constraints (C, d) with identity rows for new variables
+    C_pad = [X.C, zeros(size(X.C,1), targetNumPreds - K)];
+    pred_lb_pad = [X.pred_lb; -ones(targetNumPreds - K, 1)];
+    pred_ub_pad = [X.pred_ub; ones(targetNumPreds - K, 1)];
+
+    % Return new padded ImageStar
+    Xpad = ImageStar(V_new, C_pad, X.d, pred_lb_pad, pred_ub_pad);
+
+end
